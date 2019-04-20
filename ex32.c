@@ -50,25 +50,34 @@ void searchInDir(char* path) {
             strcmp(pDirent->d_name, "..") == 0) {
             continue;
         }
+        if (pDirent->d_type != DT_DIR) continue;
         struct dirent* userDirent;
         DIR * userName;
         if ((userName = opendir(pDirent->d_name)) == NULL)
             write(2, ERROR, ERROR_SIZE);
         while ((userDirent = readdir(userName)) != NULL){
             if (strcmp(userDirent->d_name, ".") == 0 ||
-                strcmp(userDirent->d_name, "..") == 0) {
-
+                strcmp(userDirent->d_name, "..") == 0)
                 continue;
-            }
-            if (strstr(userDirent->d_name, ".c") != NULL) {
 
+            if (strstr(userDirent->d_name, ".c") != NULL) {
+                // compile this file.
             }
 
         }
-
+        closedir(userName);
     }
+    closedir(dir);
+}
+
+int getFd(char* path) {
+    int fd;
+    if ((fd = open(path, O_RDONLY)) < 0)
+        write(2, ERROR, ERROR_SIZE);
+    return fd;
 
 }
+
 
 int main(int argc, char** argv) {
 
@@ -77,6 +86,15 @@ int main(int argc, char** argv) {
     char path[BUFF_SIZE];
     strcpy(path, argv[1]);
     char ** lines = readFile(path);
+    searchInDir(lines[0]);
+    int inFd = getFd(lines[1]);
+    int outfd = getFd(lines[2]);
 
 
+    close(inFd);
+    close(outfd);
+    int i;
+    for (i = 0; i < 3; i++)
+        free(lines[i]);
+    free(lines);
 }
