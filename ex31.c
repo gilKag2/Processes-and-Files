@@ -1,9 +1,10 @@
+/*
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
 
-#define ERROR "Error in system call"
+#define ERROR "Error in system call\n"
 #define ERROR_SIZE  strlen(ERROR)
 #define BUFF_SIZE 150
 
@@ -57,3 +58,4 @@ int main(int argc, char **argv) {
     if (similarFlag) return 3;
     else return 1;
 }
+*/
