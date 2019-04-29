@@ -44,12 +44,11 @@ void error(){
 }
 
 typedef struct Student{
-    char * name;
-    char * description;
-    char* grade;
+    char name[BUFF_SIZE];
+    char description[BUFF_SIZE];
+    char grade[BUFF_SIZE];
 } student;
 
-int resFd;
 
 
 int openFileForRead(char* path) {
@@ -84,7 +83,7 @@ int compile(char* path) {
 int cmpOutput(char* studOutput, char * correctOutput){
     pid_t  pid;
     int status;
-    char  cwd[MAX_SIZE]= {0};
+    char  cwd[BUFF_SIZE]= {0};
     if (getcwd(cwd, sizeof(cwd)) == NULL) return SYSCALL_ERROR;
     // set up path to the comp.out file in the cwd.
     strcat(cwd, "./comp.out");
@@ -115,7 +114,12 @@ int run(char* compiledFilepath, char* inputFilePath){
     int inFd = openFileForRead(inputFilePath);
 
     char * args[] = {compiledFilepath, inputFilePath, NULL};
-    int outFd = open(OUTPUT_FILE, O_CREAT | O_RDWR | O_TRUNC, 0777);
+    char outputFile[BUFF_SIZE];
+    memset(outputFile,0,strlen(outputFile));
+    if (getcwd(outputFile, sizeof(outputFile)) == NULL) return SYSCALL_ERROR;
+    strcat(outputFile, "/");
+    strcat(outputFile, OUTPUT_FILE);
+    int outFd = open(outputFile, O_CREAT | O_RDWR | O_TRUNC, 0777);
     if (inFd == -1 || outFd < 0) return SYSCALL_ERROR;
     if ((pid = fork()) == 0){
         // redirection.
@@ -124,18 +128,21 @@ int run(char* compiledFilepath, char* inputFilePath){
         if (execvp(args[0], args) == -1) return SYSCALL_ERROR;
 
     } else if (pid != -1){
-       int runtime = 0;
-       // count the runtime.
+       int runtime;
+       /*// count the runtime.
        while (!waitpid(pid, &status, WNOHANG) && runtime++ < 6)
+           sleep(1);*/
+        // if the program ran more then 5 seconds the return value will be TIMEOUT.
+        for (runtime = 0; runtime < 5; runtime++){
            sleep(1);
-
-       // if the program ran more then 5 seconds the return value will be TIMEOUT.
-       if (runtime > 5) {
-           // remove the outfile that has been created.
-           unlink(OUTPUT_FILE);
-           return TIMEOUT;
+           if (!waitpid(pid, &status, WNOHANG)) return 1;
        }
-        return 1;
+
+        // remove the outfile that has been created.
+        unlink(OUTPUT_FILE);
+        return TIMEOUT;
+
+
 
     } else{
         return  SYSCALL_ERROR;
@@ -150,7 +157,7 @@ int execute(char* cFilepath, char* inputFilePath, char* correctOutputFilePath) {
     if (compileRes == COMPILE_ERROR)
         return COMPILE_ERROR;
     else if (compileRes == SYSCALL_ERROR) return SYSCALL_ERROR;
-    char  compiledFileLocation[MAX_SIZE] = {0};
+    char  compiledFileLocation[BUFF_SIZE] = {0};
     strcpy(compiledFileLocation, "./");
     // compiled file path
     strcat(compiledFileLocation, cFilepath);
@@ -174,26 +181,26 @@ int execute(char* cFilepath, char* inputFilePath, char* correctOutputFilePath) {
 void setResults(int result, student* currStudent) {
     switch (result){
         case BAD:
-            currStudent->grade = BAD_OUTPUT_GRADE;
-            currStudent->description =  BAD_OUTPUT_DESCRIPTION;
+            strcpy(currStudent->grade, BAD_OUTPUT_GRADE) ;
+            strcpy(currStudent->description, BAD_OUTPUT_DESCRIPTION);
         case COMPILE_ERROR:
-            currStudent->grade = COMPILE_ERROR_GRADE;
-            currStudent->description = COMPILE_ERROR_DESCRIPTION;
+            strcpy(currStudent->grade, COMPILE_ERROR_GRADE);
+            strcpy(currStudent->description, COMPILE_ERROR_DESCRIPTION) ;
         case SIMILAR:
-            currStudent->grade = SIMILAR_OUTPUT_GRADE;
-            currStudent->description = SIMILAR_OUTPUT_DESCRIPTION;
+            strcpy(currStudent->grade, SIMILAR_OUTPUT_GRADE);
+            strcpy(currStudent->description , SIMILAR_OUTPUT_DESCRIPTION);
         case GREAT:
-            currStudent->grade = GREAT_JOB_GRADE;
-            currStudent->description = GREAT_JOB_DESCRIPTION;
+            strcpy(currStudent->grade, GREAT_JOB_GRADE);
+            strcpy(currStudent->description, GREAT_JOB_DESCRIPTION);
         case TIMEOUT:
-            currStudent->grade = TIMEOUT_GRADE;
-            currStudent->description = TIMEOUT_ERROR_DESCRIPTION;
+            strcpy(currStudent->grade, TIMEOUT_GRADE);
+            strcpy(currStudent->description, TIMEOUT_ERROR_DESCRIPTION) ;
 
     }
 }
 
 void writeToResults(student* currStudent) {
-    char studentResult[MAX_SIZE] = {0};
+    char studentResult[BUFF_SIZE] = {0};
     strcpy(studentResult, currStudent->name);
     strcat(studentResult, ",");
     strcat(studentResult, currStudent->grade);
@@ -219,7 +226,7 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
         error();
         return 0;
     }
-    char * pathToFile = {0};
+    char  pathToFile[BUFF_SIZE];
     strcpy(pathToFile, dirPath);
     while ((pDirent = readdir(dir)) != NULL) {
         strcat(pathToFile, "/");
@@ -234,7 +241,12 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
         strcpy(currStudent.name, pDirent->d_name);
         struct dirent* userDirent;
         DIR * userName;
-        if ((userName = opendir(pDirent->d_name)) == NULL) {
+        char dirName[BUFF_SIZE];
+        memset(dirName, 0, strlen(dirName));
+        strcpy(dirName, dirPath);
+        strcat(dirName , "/");
+        strcat(dirName, pDirent->d_name);
+        if ((userName = opendir(dirName)) == NULL) {
             error();
             closedir(dir);
             return 0;
@@ -256,10 +268,11 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
                    return 0;
                }
                setResults(result, &currStudent);
+                break;
             }
 
         }
-        currStudent.grade = NO_FILE_GRADE;
+        strcpy(currStudent.grade, NO_FILE_GRADE);
         strcpy(currStudent.description, NO_FILE_DESCRIPTION);
         writeToResults(&currStudent);
         closedir(userName);
@@ -279,7 +292,7 @@ int main(int argc, char** argv) {
     }
     int fd = openFileForRead(argv[1]);
     char buffer[MAX_SIZE];
-    bzero(buffer, BUFF_SIZE);
+    bzero(buffer, MAX_SIZE);
     if (read(fd, buffer, MAX_SIZE) < 0) {
         error();
         close(fd);
@@ -290,8 +303,8 @@ int main(int argc, char** argv) {
     char * lines[3];
     int i = 0;
     lines[i] = strtok(buffer, delims);
-    while (lines[i] != NULL){
-        lines[i++] = strtok(NULL, delims);
+    while (lines[i++] != NULL){
+        lines[i] = strtok(NULL, delims);
     }
     searchInDir(lines[0], lines[1], lines[2]);
     return 0;
