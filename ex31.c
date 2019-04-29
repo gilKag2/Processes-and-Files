@@ -6,9 +6,7 @@
 
 #define ERROR "Error in system call\n"
 #define ERROR_SIZE  strlen(ERROR)
-#define BUFF_SIZE 150
-
-
+#define BUFF_SIZE 1
 
 
 int main(int argc, char **argv) {
@@ -18,44 +16,71 @@ int main(int argc, char **argv) {
     if ((fd1 = open(argv[1], O_RDONLY)) < 0 || (fd2 = open(argv[2], O_RDONLY)) < 0)
         write(2, ERROR, ERROR_SIZE);
 
-    char buff1[BUFF_SIZE];
-    char buff2[BUFF_SIZE];
-
-    int similarFlag = 0;
-    int numOfBytes1, numOfBytes2 = 0;
+   char buff1[BUFF_SIZE], buff2[BUFF_SIZE];
+    int res = 1;
+    int skip1 = 0, skip2 = 0;
+    int numOfBytes1 = 0, numOfBytes2 = 0;
     while (1) {
-        bzero(buff1, BUFF_SIZE);
-        bzero(buff2, BUFF_SIZE);
-        numOfBytes1 = read(fd1, buff1, BUFF_SIZE - 1);
-        numOfBytes2 = read(fd2, buff2, BUFF_SIZE - 1);
+        if (!skip1){
+            bzero(buff1, BUFF_SIZE);
+            numOfBytes1 = read(fd1, buff1, BUFF_SIZE);
+        }
+        if (!skip2){
+            bzero(buff2, BUFF_SIZE);
+            numOfBytes2 = read(fd2, buff2, BUFF_SIZE);
+        }
 
         if (numOfBytes1 < 0 || numOfBytes2 < 0) {
-            write(2, ERROR,ERROR_SIZE);
+            write(2, ERROR, ERROR_SIZE);
             break;
         }
-        // quick check to see if the files sizes are different
-        if (numOfBytes1 != numOfBytes2) return 2;
+        // check for eof.
+        if (!numOfBytes1) {
+            // if there is still data in the other file, it means they are totally different.
+            if (numOfBytes2){
+                res = 2;
+            }
+            break;
+        }
+        if (!numOfBytes2){
+            res = 2;
+            break;
+        }
+        if (skip1){
+            if (*buff2 == '\n' || *buff2 == ' ') continue;
 
-        // eof check.
-        if (numOfBytes1 == 0) break;
-
-        int i;
-        for ( i = 0; i < numOfBytes1; i++) {
-            if (buff1[i] != buff2[i]) {
-                int diff = buff1[i] - buff2[i];
+        } else if (skip2){
+            if (*buff1 == '\n' || *buff1 == ' ') continue;
+        }
+        if (*buff1 != *buff2){
+            if (*buff1 == '\n' || *buff1 == ' ') {
+                res = 3;
+                skip2 = 1;
+                continue;
+            }
+            else if (*buff2 == '\n' || *buff2 == ' '){
+                skip1 = 1;
+                res = 3;
+                continue;
+            }
+            else {
+                int diff = *buff1 - *buff2;
                 // check if the difference of the ascii values is 32, which means one of the letters
                 // is the capital of the other one.
-                if (diff == 32 || diff == -32) similarFlag = 1;
-                    // the letters are totally different.
-                else  return 2;
-
+                if (diff == 32 || diff == -32) res = 3;
+                    // the chars are totally different.
+                else {
+                    res = 2;
+                    break;
+                }
             }
-
         }
+        skip1 = 0;
+        skip2 = 0;
     }
     close(fd1);
     close(fd2);
-    if (similarFlag) return 3;
-    else return 1;
+
+    return res;
 }
 */
