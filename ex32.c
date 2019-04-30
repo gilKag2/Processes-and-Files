@@ -1,7 +1,8 @@
-//
-// Gil Kagan
-// 315233221
-//
+/*
+ * Gil Kagan
+ * 315233221
+ * group 05
+ */
 
 #include <stdio.h>
 #include <string.h>
@@ -43,6 +44,7 @@
 
 void error(){
     write(2, ERROR, ERROR_SIZE);
+
 }
 
 typedef struct Student{
@@ -52,7 +54,7 @@ typedef struct Student{
 } student;
 
 
-
+// opens the file with readonly permission, and returns the fd.
 int openFileForRead(char* path) {
     int fd;
     if ((fd = open(path, O_RDONLY)) < 0) {
@@ -62,10 +64,12 @@ int openFileForRead(char* path) {
     return fd;
 
 }
+// concats the file to path.
 void setPath(char* path, char* file){
     strcat(path, "/");
     strcat(path, file);
 }
+// compares the output of two files using the program from ex31.
 int cmpOutput(char* dir, char * correctOutput){
     char studOutput[BUFF_SIZE];
     strcpy(studOutput, dir);
@@ -82,6 +86,7 @@ int cmpOutput(char* dir, char * correctOutput){
         if (execvp(args[0], args) == -1) return SYSCALL_ERROR;
     } else if (pid != -1){
         if (waitpid(pid, &status, 0) < 0) return SYSCALL_ERROR;
+        // result of the comparison.
         int res = WEXITSTATUS(status);
         unlink(studOutput);
         switch (res){
@@ -99,6 +104,7 @@ int cmpOutput(char* dir, char * correctOutput){
 
 }
 
+//compiles the c file.
 int compile(char* path, char* cFileName) {
     pid_t pid;
     int status;
@@ -127,7 +133,7 @@ int compile(char* path, char* cFileName) {
 }
 
 
-
+// runs the compiled program.
 int run(char* dirPath, char* inputFilePath){
 
     pid_t pid;
@@ -142,14 +148,19 @@ int run(char* dirPath, char* inputFilePath){
     strcpy(outputFile, dirPath);
     setPath(outputFile, OUTPUT_FILE);
     int outFd = open(outputFile, O_CREAT | O_RDWR | O_TRUNC, 0777);
-    if (inFd == -1 || outFd < 0) return SYSCALL_ERROR;
+    if (inFd == -1 || outFd < 0) {
+        unlink(outputFile);
+        unlink(compiledFilePath);
+        return SYSCALL_ERROR;
+    }
 
     if ((pid = fork()) == 0){
-        // redirection.
+        // redirection and execution.
         if ((dup2(inFd, 0) < 0) ||  (dup2(outFd, 1) < 0) || (execvp(args[0], args) == -1)){
             close(inFd);
             close(outFd);
             unlink(outputFile);
+            unlink(compiledFilePath);
             return SYSCALL_ERROR;
         }
 
@@ -158,15 +169,15 @@ int run(char* dirPath, char* inputFilePath){
         close(inFd);
         close(outFd);
        int runtime = 0;
-
+        // if the program runs more then 5 seconds, the grade will be timeout.
        while (!waitpid(pid, &status, WNOHANG) && runtime < MAX_TIME){
            runtime++;
            sleep(1);
        }
-       unlink(compiledFilePath);
-       if (runtime < MAX_TIME)
+        unlink(compiledFilePath);
+        if (runtime < MAX_TIME) {
            return 1;
-        unlink(outputFile);
+       }
         return TIMEOUT;
 
 
@@ -175,10 +186,12 @@ int run(char* dirPath, char* inputFilePath){
         close(inFd);
         close(outFd);
         unlink(outputFile);
+        unlink(compiledFilePath);
         return SYSCALL_ERROR;
     }
 }
 
+// compiles, runs and compares the outputs.
 int execute(char* dirPath, char* inputFilePath, char* correctOutputFilePath, char* cFileName) {
     //compile
     int compileRes = compile(dirPath, cFileName);
@@ -197,6 +210,7 @@ int execute(char* dirPath, char* inputFilePath, char* correctOutputFilePath, cha
     return cmpRes;
 }
 
+// sets the grade and description to the student according to the result.
 void setResults(int result, student* currStudent) {
     switch (result){
         case BAD:
@@ -222,6 +236,7 @@ void setResults(int result, student* currStudent) {
     }
 }
 
+// add the student to the file.
 void writeToResults(student* currStudent) {
     char studentResult[BUFF_SIZE] = {0};
     strcpy(studentResult, currStudent->name);
@@ -240,10 +255,12 @@ void writeToResults(student* currStudent) {
     close(resultFd);
 }
 
+// checks if the file is c file.
 int isCFile(char* file){
     return (file[strlen(file) - 2] == '.' && file[strlen(file) -1] == 'c');
 }
 
+// searches in the directories, and executes the c files.
 int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
     DIR* dir;
     struct dirent* pDirent;

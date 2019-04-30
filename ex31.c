@@ -1,8 +1,14 @@
 /*
+ * Gil Kagan
+ * 315233221
+ * group 05
+ */
+
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define ERROR "Error in system call\n"
 #define ERROR_SIZE  strlen(ERROR)
@@ -13,14 +19,17 @@ int main(int argc, char **argv) {
     if (argc != 3)
         return 0;
     int fd1, fd2;
-    if ((fd1 = open(argv[1], O_RDONLY)) < 0 || (fd2 = open(argv[2], O_RDONLY)) < 0)
+    if ((fd1 = open(argv[1], O_RDONLY)) < 0 || (fd2 = open(argv[2], O_RDONLY)) < 0) {
         write(2, ERROR, ERROR_SIZE);
+        exit(0);
+    }
 
    char buff1[BUFF_SIZE], buff2[BUFF_SIZE];
     int res = 1;
     int skip1 = 0, skip2 = 0;
     int numOfBytes1 = 0, numOfBytes2 = 0;
     while (1) {
+        // dont read from file1 if we want to skip.
         if (!skip1){
             bzero(buff1, BUFF_SIZE);
             numOfBytes1 = read(fd1, buff1, BUFF_SIZE);
@@ -32,18 +41,22 @@ int main(int argc, char **argv) {
 
         if (numOfBytes1 < 0 || numOfBytes2 < 0) {
             write(2, ERROR, ERROR_SIZE);
+            printf("gil\n");
             break;
         }
         // check for eof.
         if (!numOfBytes1) {
-            // if there is still data in the other file, it means they are totally different.
-            if (numOfBytes2){
-                res = 2;
+            // eof of both files.
+            if (!numOfBytes2){
+                 break;
             }
+            res = 2;
+            printf("here\n");
             break;
         }
         if (!numOfBytes2){
             res = 2;
+            printf("there\n");
             break;
         }
         if (skip1){
@@ -83,4 +96,3 @@ int main(int argc, char **argv) {
 
     return res;
 }
-*/
