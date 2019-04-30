@@ -83,6 +83,7 @@ int cmpOutput(char* dir, char * correctOutput){
     } else if (pid != -1){
         if (waitpid(pid, &status, 0) < 0) return SYSCALL_ERROR;
         int res = WEXITSTATUS(status);
+        unlink(studOutput);
         switch (res){
             case 1:
                 return GREAT;
@@ -90,6 +91,7 @@ int cmpOutput(char* dir, char * correctOutput){
                 return BAD;
             case 3:
                 return SIMILAR;
+
             default:
                 return SYSCALL_ERROR;
         }
@@ -141,21 +143,27 @@ int run(char* dirPath, char* inputFilePath){
     setPath(outputFile, OUTPUT_FILE);
     int outFd = open(outputFile, O_CREAT | O_RDWR | O_TRUNC, 0777);
     if (inFd == -1 || outFd < 0) return SYSCALL_ERROR;
+
     if ((pid = fork()) == 0){
         // redirection.
-        if (dup2(inFd, 0) < 0) return SYSCALL_ERROR;
-        if (dup2(outFd, 1) < 0) return SYSCALL_ERROR;
-        if (execvp(args[0], args) == -1) return SYSCALL_ERROR;
+        if ((dup2(inFd, 0) < 0) ||  (dup2(outFd, 1) < 0) || (execvp(args[0], args) == -1)){
+            close(inFd);
+            close(outFd);
+            unlink(outputFile);
+            return SYSCALL_ERROR;
+        }
+
 
     } else if (pid != -1){
         close(inFd);
         close(outFd);
-         unlink(compiledFilePath);
        int runtime = 0;
 
        while (!waitpid(pid, &status, WNOHANG) && runtime < MAX_TIME){
            runtime++;
+           sleep(1);
        }
+       unlink(compiledFilePath);
        if (runtime < MAX_TIME)
            return 1;
         unlink(outputFile);
@@ -164,9 +172,11 @@ int run(char* dirPath, char* inputFilePath){
 
 
     } else{
-        return  SYSCALL_ERROR;
+        close(inFd);
+        close(outFd);
+        unlink(outputFile);
+        return SYSCALL_ERROR;
     }
-    kill(pid, SIGSTOP);
 }
 
 int execute(char* dirPath, char* inputFilePath, char* correctOutputFilePath, char* cFileName) {
@@ -192,15 +202,19 @@ void setResults(int result, student* currStudent) {
         case BAD:
             strcpy(currStudent->grade, BAD_OUTPUT_GRADE) ;
             strcpy(currStudent->description, BAD_OUTPUT_DESCRIPTION);
+            break;
         case COMPILE_ERROR:
             strcpy(currStudent->grade, COMPILE_ERROR_GRADE);
             strcpy(currStudent->description, COMPILE_ERROR_DESCRIPTION) ;
+            break;
         case SIMILAR:
             strcpy(currStudent->grade, SIMILAR_OUTPUT_GRADE);
             strcpy(currStudent->description , SIMILAR_OUTPUT_DESCRIPTION);
+            break;
         case GREAT:
             strcpy(currStudent->grade, GREAT_JOB_GRADE);
             strcpy(currStudent->description, GREAT_JOB_DESCRIPTION);
+            break;
         case TIMEOUT:
             strcpy(currStudent->grade, TIMEOUT_GRADE);
             strcpy(currStudent->description, TIMEOUT_ERROR_DESCRIPTION) ;
@@ -216,7 +230,7 @@ void writeToResults(student* currStudent) {
     strcat(studentResult, ",");
     strcat(studentResult, currStudent->description);
     strcat(studentResult, "\n");
-    int resultFd = open(RESULT_FILENAME, O_CREAT | O_RDWR | O_TRUNC, 0777);
+    int resultFd = open(RESULT_FILENAME, O_APPEND | O_CREAT | O_WRONLY, S_IRUSR | S_IWGRP | S_IRGRP | S_IWUSR);
     if (resultFd < 0) {
         error();
         return;
@@ -224,6 +238,10 @@ void writeToResults(student* currStudent) {
     if (write(resultFd, studentResult, sizeof(studentResult)) < 0)
         error();
     close(resultFd);
+}
+
+int isCFile(char* file){
+    return (file[strlen(file) - 2] == '.' && file[strlen(file) -1] == 'c');
 }
 
 int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
@@ -261,7 +279,7 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
                 continue;
 
             // c file founded.
-            if (strstr(userDirent->d_name, ".c") != NULL) {
+            if (isCFile(userDirent->d_name)) {
                 found = 1;
                int result = execute(pathToFile, inputPath, outputPath, userDirent->d_name);
                if (result == SYSCALL_ERROR) {
