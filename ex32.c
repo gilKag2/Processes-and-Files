@@ -15,8 +15,9 @@
 #define ERROR_SIZE strlen(ERROR)
 #define BUFF_SIZE 150
 #define MAX_SIZE 450
+#define MAX_TIME 5
 
-#define OUTPUT_FILE "/output.txt"
+#define OUTPUT_FILE "output.txt"
 #define COMPILE_NAME "student.out"
 #define COMPILE_ERROR -1
 #define TIMEOUT -2
@@ -60,26 +61,6 @@ int openFileForRead(char* path) {
     return fd;
 
 }
-
-int compile(char* path) {
-    pid_t pid;
-    int status;
-
-    char * args[] = {"gcc", path, "-o", COMPILE_NAME, NULL};
-    if ((pid = fork()) == 0) {
-        if (execvp(args[0], args) == - 1) {
-            return SYSCALL_ERROR;
-        }
-    } else if(pid != -1) {
-        if (wait(&status) < 0) return 0;
-        // error when compiling.
-        if (WEXITSTATUS(status)) return COMPILE_ERROR;
-        // if compiled seceded the return flag will be 1.
-        return 1;
-    } else return SYSCALL_ERROR;
-    kill(pid, SIGKILL);
-}
-
 int cmpOutput(char* studOutput, char * correctOutput){
     pid_t  pid;
     int status;
@@ -107,6 +88,35 @@ int cmpOutput(char* studOutput, char * correctOutput){
 
 }
 
+int compile(char* path, char* cFileName) {
+    pid_t pid;
+    int status;
+    char compiledFilePath[BUFF_SIZE];
+    char filePath[BUFF_SIZE];
+    strcpy(compiledFilePath, path);
+    strcat(compiledFilePath, "/");
+    strcpy(filePath, compiledFilePath);
+    strcat(filePath, "/");
+    strcat(filePath, cFileName);
+    strcat(compiledFilePath, COMPILE_NAME);
+
+    char * args[] = {"gcc", filePath, "-o", compiledFilePath, NULL};
+    if ((pid = fork()) == 0) {
+        if (execvp(args[0], args) == - 1) {
+            return SYSCALL_ERROR;
+        }
+    } else if(pid != -1) {
+        if (wait(&status) < 0) return 0;
+        // error when compiling.
+        if (WEXITSTATUS(status)) return COMPILE_ERROR;
+        // if compiled seceded the return flag will be 1.
+        return 1;
+    } else return SYSCALL_ERROR;
+    kill(pid, SIGKILL);
+}
+
+
+
 int run(char* compiledFilepath, char* inputFilePath){
 
     pid_t pid;
@@ -128,17 +138,15 @@ int run(char* compiledFilepath, char* inputFilePath){
         if (execvp(args[0], args) == -1) return SYSCALL_ERROR;
 
     } else if (pid != -1){
-       int runtime;
-       /*// count the runtime.
-       while (!waitpid(pid, &status, WNOHANG) && runtime++ < 6)
-           sleep(1);*/
-        // if the program ran more then 5 seconds the return value will be TIMEOUT.
-        for (runtime = 0; runtime < 5; runtime++){
-           sleep(1);
-           if (!waitpid(pid, &status, WNOHANG)) return 1;
-       }
+        close(inFd);
+        close(outFd);
+       int runtime = 0;
 
-        // remove the outfile that has been created.
+       while (!waitpid(pid, &status, WNOHANG) && runtime < MAX_TIME){
+           runtime++;
+       }
+       if (runtime < MAX_TIME)
+           return 1;
         unlink(OUTPUT_FILE);
         return TIMEOUT;
 
@@ -150,30 +158,33 @@ int run(char* compiledFilepath, char* inputFilePath){
     kill(pid, SIGSTOP);
 }
 
-int execute(char* cFilepath, char* inputFilePath, char* correctOutputFilePath) {
+int execute(char* dirPath, char* inputFilePath, char* correctOutputFilePath, char* cFileName) {
     //compile
-    int compileRes = compile(cFilepath);
+    int compileRes = compile(dirPath, cFileName);
     // compile failed.
     if (compileRes == COMPILE_ERROR)
         return COMPILE_ERROR;
     else if (compileRes == SYSCALL_ERROR) return SYSCALL_ERROR;
-    char  compiledFileLocation[BUFF_SIZE] = {0};
-    strcpy(compiledFileLocation, "./");
+    char  compiledFilePath[BUFF_SIZE] = {0};
+    strcpy(compiledFilePath, "./");
     // compiled file path
-    strcat(compiledFileLocation, cFilepath);
-    strcat(compiledFileLocation, "/");
-    strcat(compiledFileLocation, COMPILE_NAME);
+    strcat(compiledFilePath, dirPath);
+    strcat(compiledFilePath, "/");
+    strcat(compiledFilePath, COMPILE_NAME);
     // run the compiled file
-    int runRes = run(compiledFileLocation, inputFilePath);
+    int runRes = run(compiledFilePath, inputFilePath);
     if (runRes == TIMEOUT) return TIMEOUT;
     else if(runRes  == SYSCALL_ERROR) {
-        unlink(compiledFileLocation);
+        unlink(compiledFilePath);
         unlink(OUTPUT_FILE);
         return SYSCALL_ERROR;
     }
-
-    int cmpRes = cmpOutput(OUTPUT_FILE, correctOutputFilePath);
-    unlink(compiledFileLocation);
+    char outputPath[BUFF_SIZE];
+    strcpy(outputPath, dirPath);
+    strcat(outputPath, "/");
+    strcat(outputPath, OUTPUT_FILE);
+    int cmpRes = cmpOutput(outputPath, correctOutputFilePath);
+    unlink(compiledFilePath);
     unlink(OUTPUT_FILE);
     return cmpRes;
 }
@@ -215,8 +226,6 @@ void writeToResults(student* currStudent) {
     if (write(resultFd, studentResult, sizeof(studentResult)) < 0)
         error();
     close(resultFd);
-
-
 }
 
 int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
@@ -226,9 +235,10 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
         error();
         return 0;
     }
-    char  pathToFile[BUFF_SIZE];
-    strcpy(pathToFile, dirPath);
+
     while ((pDirent = readdir(dir)) != NULL) {
+        char  pathToFile[BUFF_SIZE];
+        strcpy(pathToFile, dirPath);
         strcat(pathToFile, "/");
         strcat(pathToFile, pDirent->d_name);
         student currStudent;
@@ -241,26 +251,21 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
         strcpy(currStudent.name, pDirent->d_name);
         struct dirent* userDirent;
         DIR * userName;
-        char dirName[BUFF_SIZE];
-        memset(dirName, 0, strlen(dirName));
-        strcpy(dirName, dirPath);
-        strcat(dirName , "/");
-        strcat(dirName, pDirent->d_name);
-        if ((userName = opendir(dirName)) == NULL) {
+        if ((userName = opendir(pathToFile)) == NULL) {
             error();
             closedir(dir);
             return 0;
         }
+        int found = 0;
         while ((userDirent = readdir(userName)) != NULL){
-            strcat(pathToFile, "/");
-            strcat(pathToFile, userDirent->d_name);
             if (strcmp(userDirent->d_name, ".") == 0 ||
                 strcmp(userDirent->d_name, "..") == 0)
                 continue;
+
             // c file founded.
             if (strstr(userDirent->d_name, ".c") != NULL) {
-
-               int result = execute(pathToFile, inputPath, outputPath);
+                found = 1;
+               int result = execute(pathToFile, inputPath, outputPath, userDirent->d_name);
                if (result == SYSCALL_ERROR) {
                    closedir(userName);
                    closedir(dir);
@@ -272,8 +277,11 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
             }
 
         }
-        strcpy(currStudent.grade, NO_FILE_GRADE);
-        strcpy(currStudent.description, NO_FILE_DESCRIPTION);
+        if (!found) {
+            strcpy(currStudent.grade, NO_FILE_GRADE);
+            strcpy(currStudent.description, NO_FILE_DESCRIPTION);
+        }
+
         writeToResults(&currStudent);
         closedir(userName);
     }
@@ -307,5 +315,6 @@ int main(int argc, char** argv) {
         lines[i] = strtok(NULL, delims);
     }
     searchInDir(lines[0], lines[1], lines[2]);
+
     return 0;
 }
