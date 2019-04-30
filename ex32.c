@@ -19,6 +19,7 @@
 
 #define OUTPUT_FILE "output.txt"
 #define COMPILE_NAME "student.out"
+#define COMPILE_FILE "./student.out"
 #define COMPILE_ERROR -1
 #define TIMEOUT -2
 #define BAD 2
@@ -61,13 +62,21 @@ int openFileForRead(char* path) {
     return fd;
 
 }
-int cmpOutput(char* studOutput, char * correctOutput){
+void setPath(char* path, char* file){
+    strcat(path, "/");
+    strcat(path, file);
+}
+int cmpOutput(char* dir, char * correctOutput){
+    char studOutput[BUFF_SIZE];
+    strcpy(studOutput, dir);
+    setPath(studOutput, OUTPUT_FILE);
     pid_t  pid;
     int status;
     char  cwd[BUFF_SIZE]= {0};
-    if (getcwd(cwd, sizeof(cwd)) == NULL) return SYSCALL_ERROR;
-    // set up path to the comp.out file in the cwd.
-    strcat(cwd, "./comp.out");
+    strcpy(cwd, dir);
+    // set up path to the comp.out file .
+    setPath(cwd, "./comp.out");
+
     char * args[] = {cwd, studOutput, correctOutput, NULL};
     if ((pid = fork()) == 0) {
         if (execvp(args[0], args) == -1) return SYSCALL_ERROR;
@@ -117,18 +126,18 @@ int compile(char* path, char* cFileName) {
 
 
 
-int run(char* compiledFilepath, char* inputFilePath){
+int run(char* dirPath, char* inputFilePath){
 
     pid_t pid;
     int status;
     int inFd = openFileForRead(inputFilePath);
-
-    char * args[] = {compiledFilepath, inputFilePath, NULL};
+    char compiledFilePath[BUFF_SIZE];
+    strcpy(compiledFilePath, dirPath);
+    strcat(compiledFilePath, COMPILE_FILE);
+    char * args[] = {compiledFilePath, inputFilePath, NULL};
     char outputFile[BUFF_SIZE];
-    memset(outputFile,0,strlen(outputFile));
-    if (getcwd(outputFile, sizeof(outputFile)) == NULL) return SYSCALL_ERROR;
-    strcat(outputFile, "/");
-    strcat(outputFile, OUTPUT_FILE);
+    strcpy(outputFile, dirPath);
+   setPath(outputFile, OUTPUT_FILE);
     int outFd = open(outputFile, O_CREAT | O_RDWR | O_TRUNC, 0777);
     if (inFd == -1 || outFd < 0) return SYSCALL_ERROR;
     if ((pid = fork()) == 0){
@@ -179,11 +188,7 @@ int execute(char* dirPath, char* inputFilePath, char* correctOutputFilePath, cha
         unlink(OUTPUT_FILE);
         return SYSCALL_ERROR;
     }
-    char outputPath[BUFF_SIZE];
-    strcpy(outputPath, dirPath);
-    strcat(outputPath, "/");
-    strcat(outputPath, OUTPUT_FILE);
-    int cmpRes = cmpOutput(outputPath, correctOutputFilePath);
+    int cmpRes = cmpOutput(dirPath, correctOutputFilePath);
     unlink(compiledFilePath);
     unlink(OUTPUT_FILE);
     return cmpRes;
@@ -293,7 +298,7 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
 
 
 int main(int argc, char** argv) {
-    //confInfo info;
+
     if (argc != 2){
         perror("Not enough params!");
         return 0;
