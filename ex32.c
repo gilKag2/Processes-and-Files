@@ -19,7 +19,7 @@
 
 #define OUTPUT_FILE "output.txt"
 #define COMPILE_NAME "student.out"
-#define COMPILE_FILE "./student.out"
+#define COMP_FILE "./comp.out"
 #define COMPILE_ERROR -1
 #define TIMEOUT -2
 #define BAD 2
@@ -72,11 +72,11 @@ int cmpOutput(char* dir, char * correctOutput){
     setPath(studOutput, OUTPUT_FILE);
     pid_t  pid;
     int status;
-    char  cwd[BUFF_SIZE]= {0};
-    strcpy(cwd, dir);
-    // set up path to the comp.out file .
-    setPath(cwd, "./comp.out");
-
+    char  cwd[BUFF_SIZE];
+    if (getcwd(cwd, sizeof(cwd)) == NULL){
+        return SYSCALL_ERROR;
+    }
+    setPath(cwd, COMP_FILE);
     char * args[] = {cwd, studOutput, correctOutput, NULL};
     if ((pid = fork()) == 0) {
         if (execvp(args[0], args) == -1) return SYSCALL_ERROR;
@@ -132,12 +132,13 @@ int run(char* dirPath, char* inputFilePath){
     int status;
     int inFd = openFileForRead(inputFilePath);
     char compiledFilePath[BUFF_SIZE];
-    strcpy(compiledFilePath, dirPath);
-    strcat(compiledFilePath, COMPILE_FILE);
+    strcpy(compiledFilePath, ".");
+    setPath(compiledFilePath, dirPath);
+    setPath(compiledFilePath, COMPILE_NAME);
     char * args[] = {compiledFilePath, inputFilePath, NULL};
     char outputFile[BUFF_SIZE];
     strcpy(outputFile, dirPath);
-   setPath(outputFile, OUTPUT_FILE);
+    setPath(outputFile, OUTPUT_FILE);
     int outFd = open(outputFile, O_CREAT | O_RDWR | O_TRUNC, 0777);
     if (inFd == -1 || outFd < 0) return SYSCALL_ERROR;
     if ((pid = fork()) == 0){
@@ -149,6 +150,7 @@ int run(char* dirPath, char* inputFilePath){
     } else if (pid != -1){
         close(inFd);
         close(outFd);
+         unlink(compiledFilePath);
        int runtime = 0;
 
        while (!waitpid(pid, &status, WNOHANG) && runtime < MAX_TIME){
@@ -156,7 +158,7 @@ int run(char* dirPath, char* inputFilePath){
        }
        if (runtime < MAX_TIME)
            return 1;
-        unlink(OUTPUT_FILE);
+        unlink(outputFile);
         return TIMEOUT;
 
 
@@ -174,23 +176,14 @@ int execute(char* dirPath, char* inputFilePath, char* correctOutputFilePath, cha
     if (compileRes == COMPILE_ERROR)
         return COMPILE_ERROR;
     else if (compileRes == SYSCALL_ERROR) return SYSCALL_ERROR;
-    char  compiledFilePath[BUFF_SIZE] = {0};
-    strcpy(compiledFilePath, "./");
-    // compiled file path
-    strcat(compiledFilePath, dirPath);
-    strcat(compiledFilePath, "/");
-    strcat(compiledFilePath, COMPILE_NAME);
     // run the compiled file
-    int runRes = run(compiledFilePath, inputFilePath);
+    int runRes = run(dirPath, inputFilePath);
     if (runRes == TIMEOUT) return TIMEOUT;
     else if(runRes  == SYSCALL_ERROR) {
-        unlink(compiledFilePath);
-        unlink(OUTPUT_FILE);
         return SYSCALL_ERROR;
     }
     int cmpRes = cmpOutput(dirPath, correctOutputFilePath);
-    unlink(compiledFilePath);
-    unlink(OUTPUT_FILE);
+
     return cmpRes;
 }
 
