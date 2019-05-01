@@ -1,3 +1,4 @@
+
 /*
  * Gil Kagan
  * 315233221
@@ -123,7 +124,7 @@ int compile(char* path, char* cFileName) {
             return SYSCALL_ERROR;
         }
     } else if(pid != -1) {
-        if (wait(&status) < 0) return 0;
+        if (waitpid(pid, &status, 0) < 0) return 0;
         // error when compiling.
         if (WEXITSTATUS(status)) return COMPILE_ERROR;
         // if compiled seceded the return flag will be 1.
@@ -168,16 +169,16 @@ int run(char* dirPath, char* inputFilePath){
     } else if (pid != -1){
         close(inFd);
         close(outFd);
-       int runtime = 0;
+        int runtime = 0;
         // if the program runs more then 5 seconds, the grade will be timeout.
-       while (!waitpid(pid, &status, WNOHANG) && runtime < MAX_TIME){
-           runtime++;
-           sleep(1);
-       }
+        while (!waitpid(pid, &status, WNOHANG) && runtime < MAX_TIME){
+            runtime++;
+            sleep(1);
+        }
         unlink(compiledFilePath);
         if (runtime < MAX_TIME) {
-           return 1;
-       }
+            return 1;
+        }
         return TIMEOUT;
 
 
@@ -298,14 +299,14 @@ int searchInDir(char* dirPath, char* inputPath, char* outputPath) {
             // c file founded.
             if (isCFile(userDirent->d_name)) {
                 found = 1;
-               int result = execute(pathToFile, inputPath, outputPath, userDirent->d_name);
-               if (result == SYSCALL_ERROR) {
-                   closedir(userName);
-                   closedir(dir);
-                   error();
-                   return 0;
-               }
-               setResults(result, &currStudent);
+                int result = execute(pathToFile, inputPath, outputPath, userDirent->d_name);
+                if (result == SYSCALL_ERROR) {
+                    closedir(userName);
+                    closedir(dir);
+                    error();
+                    return 0;
+                }
+                setResults(result, &currStudent);
                 break;
             }
 
@@ -351,3 +352,5 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+
+
